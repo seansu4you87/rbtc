@@ -4,15 +4,15 @@ require 'bitcoin/connection'
 Bitcoin.network = ARGV[0] || :bitcoin
 # Bitcoin.network = :testnet
 
-class RawJSON_Connection < Bitcoin::Connection
+class SimpleConnection < Bitcoin::Connection
   def on_handshake_begin
     puts "handshake begin"
     version = Bitcoin::Protocol::Version.new(
-        last_block: 127953,
-        from: "127.0.0.1:8333",
-        to: @sockaddr.reverse.join(":"),
-        user_agent: "/rbtc:0.0.1/",
-        relay: true
+      last_block: 127953,
+      from: "127.0.0.1:8333",
+      to: @sockaddr.reverse.join(":"),
+      user_agent: "/rbtc:0.0.1/",
+      relay: true
     )
     puts "-> version: #{version.fields}"
     send_data(version.to_pkt)
@@ -88,5 +88,5 @@ EM.run do
   # host = '217.157.1.202'
 
   # RawJSON_Connection.connect(host, 8333, connections)
-  RawJSON_Connection.connect_random_from_dns(connections)
+  SimpleConnection.connect_random_from_dns(connections)
 end
