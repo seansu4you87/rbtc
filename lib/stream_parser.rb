@@ -17,13 +17,6 @@ class StreamParser
     @stats = { total_packets: 0, total_bytes: 0, total_errors: 0 }
   end
 
-  # def parse(buf)
-  #   @buffer += buf
-  #   while parse_buffer
-  #   end
-  #   @buffer
-  # end
-
   def parse(data)
     @buffer += data
     messages = []
@@ -38,36 +31,70 @@ class StreamParser
 
   private
 
+  def magic_head
+    Bitcoin.network[:magic_head]
+  end
+
+  HEADER_SIZE = 24
+
   def parse_buffer
-    message = nil
-    head_magic = Bitcoin.network[:magic_head]
-    head_size = 24
-    return [message, false] if @buffer.size < head_size
+    return unless buffered_header?
 
-    magic, cmd, length, checksum = @buffer.unpack('a4A12Va4')
-    payload = @buffer[head_size...head_size + length]
-
-    if magic != head_magic
-      handle_stream_error(:close, 'head_magic not found')
-      @buffer = ''
-    else
-      if Digest::SHA256.digest(Digest::SHA256.digest(payload))[0...4] != checksum
-        if (length < 50_000) && (payload.size < length)
-          size_info = [payload.size, length].join('/')
-          handle_stream_error(:debug, "chunked packet stream (#{size_info})")
-        else
-          handle_stream_error(:close, 'checksum mismatch')
-        end
-        return [message, false]
-      end
-      @buffer = @buffer[head_size + length..-1] || ''
-
-      value = process_pkt(cmd, payload)
-      message = Message.new(value, cmd)
+    magic, command, length, checksum = extract_message_header
+    payload = extract_message_payload(length)
+    if magic != magic_head
+      handle_stream_error(:close, "Bad magic head: #{magic} != #{magic_head}")
+      reset_buffer!
+      return [nil, false]
     end
 
-    # not empty yet? parse more.
-    [message, !@buffer[0].nil?]
+    if checksum(payload) != checksum
+      if buffered_payload?(payload, length)
+        handle_stream_error(:close, 'checksum mismatch')
+      else
+        handle_stream_error(:debug, "chunked packet stream (#{payload.size}/#{length})")
+      end
+      return [nil, false]
+    end
+
+    rotate_buffer!(length)
+    [deserialize_message(command, payload), !buffer_empty?]
+  end
+
+  def buffered_header?
+    @buffer.size >= HEADER_SIZE
+  end
+
+  def extract_message_header
+    @buffer.unpack("a4A12Va4")
+  end
+
+  def extract_message_payload(length)
+    a = HEADER_SIZE
+    b = HEADER_SIZE + length
+    @buffer[a...b]
+  end
+
+  def reset_buffer!
+    @buffer = ""
+  end
+
+  def checksum(payload)
+    Digest::SHA256.digest(Digest::SHA256.digest(payload))[0...4]
+  end
+
+  def buffered_payload?(payload, length)
+    length >= 50_000 || payload.length >= length
+  end
+
+  def rotate_buffer!(length)
+    a = HEADER_SIZE + length
+    b = -1
+    @buffer = @buffer[a..b] || ""
+  end
+
+  def buffer_empty?
+    @buffer[0].nil?
   end
 
   def parse_inv(payload, type = :put)
@@ -131,75 +158,6 @@ class StreamParser
     [version, hashes, stop_hash]
   end
 
-  def process_pkt(command, payload)
-    @stats[:total_packets] += 1
-    @stats[:total_bytes] += payload.bytesize
-    @stats[command] ? (@stats[command] += 1) : @stats[command] = 1
-    case command
-    when 'tx'
-      puts "Parsed tx"
-      Bitcoin::Protocol::Tx.new(payload)
-    when 'block'
-      puts "Parsed block"
-      Bitcoin::Protocol::Block.new(payload)
-    when 'headers'
-      puts "Parsed headers"
-      parse_headers(payload)
-    when 'inv'
-      # puts "Parsed inv"
-      parse_inv(payload, :put)
-      :inv
-    when 'getdata'
-      puts "Parsed getdata"
-      parse_inv(payload, :get)
-      :getdata
-    when 'addr'
-      puts "Parsed addr"
-      parse_addr(payload)
-    when 'getaddr'
-      puts "Parsed getaddr"
-      :getaddr
-    when 'verack'
-      puts "Parsed verack"
-      :verack
-    when 'version'
-      puts "Parsed version"
-      parse_version(payload)
-    when 'alert'
-      # puts "Parsed alert"
-      parse_alert(payload)
-      :alert
-    when 'ping';
-      puts "Parsed ping"
-      payload.unpack1('Q')
-    when 'pong';
-      puts "Parsed pong"
-      payload.unpack1('Q')
-    when 'getblocks';
-      puts "Parsed getblocks"
-      parse_getblocks(payload)
-    when 'getheaders';
-      puts "Parsed getheaders"
-      parse_getblocks(payload)
-    when 'mempool';
-      handle_mempool_request(payload)
-      :mempool
-    when 'notfound';
-      handle_notfound_reply(payload)
-      :notfound
-    when 'merkleblock';
-      puts "Parsed merkleblock"
-      parse_mrkle_block(payload)
-    when 'reject';
-      puts "Parsed reject"
-      handle_reject(payload)
-    else
-      puts "Parsed unknown...about to parse errors..."
-      parse_error(:unknown_packet, [command, payload.hth])
-      :error
-    end
-  end
-
   def parse_version(payload)
     @version = Bitcoin::Protocol::Version.parse(payload)
   end
@@ -209,6 +167,76 @@ class StreamParser
     # Bitcoin::Protocol::Alert.parse(payload)
 
     puts "Parsed alert - except didn't cause it's broken"
+  end
+
+  def deserialize_message(command, payload)
+    @stats[:total_packets] += 1
+    @stats[:total_bytes] += payload.bytesize
+    @stats[command] ? (@stats[command] += 1) : @stats[command] = 1
+    value = case command
+            when 'tx'
+              puts "Parsed tx"
+              Bitcoin::Protocol::Tx.new(payload)
+            when 'block'
+              puts "Parsed block"
+              Bitcoin::Protocol::Block.new(payload)
+            when 'headers'
+              puts "Parsed headers"
+              parse_headers(payload)
+            when 'inv'
+              # puts "Parsed inv"
+              parse_inv(payload, :put)
+              :inv
+            when 'getdata'
+              puts "Parsed getdata"
+              parse_inv(payload, :get)
+              :getdata
+            when 'addr'
+              puts "Parsed addr"
+              parse_addr(payload)
+            when 'getaddr'
+              puts "Parsed getaddr"
+              :getaddr
+            when 'verack'
+              puts "Parsed verack"
+              :verack
+            when 'version'
+              puts "Parsed version"
+              parse_version(payload)
+            when 'alert'
+              # puts "Parsed alert"
+              parse_alert(payload)
+              :alert
+            when 'ping';
+              puts "Parsed ping"
+              payload.unpack1('Q')
+            when 'pong';
+              puts "Parsed pong"
+              payload.unpack1('Q')
+            when 'getblocks';
+              puts "Parsed getblocks"
+              parse_getblocks(payload)
+            when 'getheaders';
+              puts "Parsed getheaders"
+              parse_getblocks(payload)
+            when 'mempool';
+              handle_mempool_request(payload)
+              :mempool
+            when 'notfound';
+              handle_notfound_reply(payload)
+              :notfound
+            when 'merkleblock';
+              puts "Parsed merkleblock"
+              parse_mrkle_block(payload)
+            when 'reject';
+              puts "Parsed reject"
+              handle_reject(payload)
+            else
+              puts "Parsed unknown...about to parse errors..."
+              parse_error(:unknown_packet, [command, payload.hth])
+              :error
+            end
+    Message.new(value, command)
   end
 
   def handle_reject(payload)

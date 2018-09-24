@@ -9,6 +9,15 @@ require 'bitcoin'
 # lib
 require_relative './stream_parser'
 
+def log(str, tags = [])
+  out = str
+  if tags.count > 0
+    tag_str = tags.map { |t| "[#{t}]" }.join(" ")
+    out = "#{tag_str} #{out}"
+  end
+  puts "#{Time.now} #{out}"
+end
+
 class DNSResolver
   attr_reader :seeds
 
@@ -22,8 +31,8 @@ class DNSResolver
     while ips.empty?
       raise "BOOM! out of seeds" if seeds.empty?
 
-      seed = seeds.shift.tap { |s| puts "Out of IPs, fetching next seed: #{s}" }
-      new_ips = Resolv::DNS.new.getaddresses(seed).compact.map(&:to_s).tap { |new| puts "Fetched #{new.count} ips" }
+      seed = seeds.shift.tap { |s| log "Out of IPs, fetching next seed: #{s}" }
+      new_ips = Resolv::DNS.new.getaddresses(seed).compact.map(&:to_s).tap { |new| log "Fetched #{new.count} ips" }
       ips.concat(new_ips)
     end
 
@@ -51,7 +60,7 @@ class Peer
     loop do
       recv
 
-      puts "listening...#{count} loops" if count % 1_000_000 == 0
+      log "listening...#{count} loops" if count % 1_000_000 == 0
       count += 1
     end
   end
@@ -63,9 +72,9 @@ class Peer
   def recv(_type = nil)
     socket.gets.tap do |data|
       if data.nil?
-        # puts "<- nil"
+        # log "<- nil"
       else
-        puts "<- data: #{data}"
+        log "<- data: #{data}"
 
         messages = stream_parser.parse(data)
         engine.handle(messages) unless messages.empty?
@@ -75,12 +84,12 @@ class Peer
 
   def connect(ip)
     port = Bitcoin.network[:default_port]
-    puts "Connecting to peer @ #{ip}:#{port}"
+    log "Connecting to peer @ #{ip}:#{port}"
 
     TCPSocket.open(ip, port).tap do
       @ip = ip
       @port = port
-      puts "Connected!"
+      log "Connected!"
     end
   end
 end
@@ -90,51 +99,51 @@ class Engine
 
   def handle(messages)
     messages.each do |m|
-      puts "handling <- message: (#{m.type}, #{m.value})"
+      log "handling <- message: (#{m.type}, #{m.value})"
       send(:"handle_#{m.type}", m.value)
     end
   end
 
   def handle_version(version)
-    puts "handling <- version: #{version.fields}"
+    log "handling <- version: #{version.fields}"
   end
 
   def handle_verack(_)
-    puts "handling <- verack"
+    log "handling <- verack"
 
     start = ("\x00"*32)
     stop  = ("\x00"*32)
     pkt = Bitcoin::Protocol.pkt("getblocks", "\x00" + start + stop )
-    # puts "-> getblocks (#{start}, #{stop})"
+    # log "-> getblocks (#{start}, #{stop})"
     # channel.puts pkt
   end
 
   def handle_ping(nonce)
-    puts "handling <- ping with nonce: #{nonce}"
+    log "handling <- ping with nonce: #{nonce}"
 
     pong = Bitcoin::Protocol.pong_pkt(nonce)
-    puts "-> pong: #{pong}"
+    log "-> pong: #{pong}"
     channel.puts pong
   end
 
   def handle_alert(_)
-    puts "handling <- alert"
+    log "handling <- alert"
   end
 
   def handle_addr(address)
-    puts "handling <- addr: #{address}"
+    log "handling <- addr: #{address}"
   end
 
   def handle_getheaders(headers)
-    puts "handling <- getheaders: #{headers}"
+    log "handling <- getheaders: #{headers}"
   end
 
   def handle_inv(inv)
-    puts "handling <- inv: #{inv}"
+    log "handling <- inv: #{inv}"
   end
 
   def send_version(ip, port)
-    puts "shaking hands..."
+    log "shaking hands..."
     version = Bitcoin::Protocol::Version.new(
         last_block: 127_953,
         from: "127.0.0.1:8333",
@@ -142,13 +151,13 @@ class Engine
         user_agent: "/rbtc:0.0.1/",
         relay: true
     )
-    puts "-> version: #{version.fields}"
+    log "-> version: #{version.fields}"
     channel.puts version.to_pkt
   end
 
   # def method_missing(m, *args, &blk)
   #   if m.to_s.start_with?("handle")
-  #     puts "No handler defined: #{m}"
+  #     log "No handler defined: #{m}"
   #   else
   #     raise "BOOM: (#{m}, #{args}, #{blk}"
   #   end
@@ -163,7 +172,7 @@ end
 # <- version
 # <- verack
 
-puts "NEW RUN: #{Time.now}"
+log "NEW RUN: #{Time.now}"
 
 # seeds = Bitcoin.network[:dns_seeds]
 # resolver = DNSResolver.new(seeds)
@@ -175,4 +184,4 @@ engine = Engine.new
 peer = Peer.new(ip, engine)
 peer.run_loop
 
-puts "DONE"
+log "DONE"
