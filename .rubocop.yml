@@ -1,6 +1,12 @@
 # Relaxed.Ruby.Style
 ## Version 2.2
 
+Style/EachWithObject:
+  Enabled: false
+
+Style/NumericPredicate:
+  Enabled: false
+
 Performance/RedundantBlockCall:
   Enabled: false
 

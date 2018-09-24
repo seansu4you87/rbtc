@@ -1,14 +1,21 @@
 # frozen_string_literal: true
 
-# ruby
-require 'resolv'
-require 'socket'
-
-# gem
 require 'bitcoin'
+require 'celluloid/current'
 
-# lib
 require_relative './stream_parser'
+
+# NOTE(yu): Celluloid is unmaintained
+#
+# While really simple to use (literally just include the module, and add a single `async` call),
+# the library quickly crashed with
+#
+# `E, [2018-09-24T00:35:59.347720 #83602] ERROR -- : Couldn't cleanly terminate all actors in 10 seconds!`
+#
+# I checked and it looked like the library is unmaintained.  What a shame, seems a lot better than
+# EventMachine.
+#
+# The `Engine` and `Peer` class are copy/pasta'd from `tcp.rb`
 
 def log(str, tags = [])
   out = str
@@ -17,77 +24,6 @@ def log(str, tags = [])
     out = "#{tag_str} #{out}"
   end
   puts "#{Time.now} #{out}"
-end
-
-class DNSResolver
-  attr_reader :seeds
-
-  def initialize(seeds)
-    raise "BOOM" if seeds.empty?
-    @seeds = seeds
-    @ips = []
-  end
-
-  def next_ip
-    while ips.empty?
-      raise "BOOM! out of seeds" if seeds.empty?
-
-      seed = seeds.shift.tap { |s| log "Out of IPs, fetching next seed: #{s}" }
-      new_ips = Resolv::DNS.new.getaddresses(seed).compact.map(&:to_s).tap { |new| log "Fetched #{new.count} ips" }
-      ips.concat(new_ips)
-    end
-
-    ips.shift
-  end
-
-  private
-
-  attr_reader :ips
-end
-
-class Peer
-  attr_reader :ip, :port
-
-  def initialize(ip, engine)
-    @socket = connect(ip)
-    @stream_parser = StreamParser.new
-    @engine = engine.tap { |e| e.channel = @socket }
-  end
-
-  def run_loop
-    engine.send_version(ip, port)
-    loop do
-      recv
-    end
-  end
-
-  private
-
-  attr_reader :socket, :stream_parser, :engine
-
-  def recv(_type = nil)
-    socket.gets.tap do |data|
-      if data.nil?
-        # log "<- nil"
-      else
-        log "<- data: #{data}"
-
-        messages = stream_parser.parse(data)
-        engine.handle(messages) unless messages.empty?
-      end
-    end
-  end
-
-  def connect(ip)
-    port = Bitcoin.network[:default_port]
-    log "Connecting to peer @ #{ip}:#{port}"
-
-    TCPSocket.open(ip, port).tap do
-      @ip = ip
-      @port = port
-      log "Connected!"
-    end
-  end
 end
 
 class Engine
@@ -162,22 +98,56 @@ class Engine
   # end
 end
 
-# NOTE(yu): Network Protocol Flow
-#
-# -> version
-# <- version
-# <- verack
+class Peer
+  include Celluloid
 
-log "NEW RUN: #{Time.now}"
+  attr_reader :ip, :port
 
-# seeds = Bitcoin.network[:dns_seeds]
-# resolver = DNSResolver.new(seeds)
-# ip = resolver.next_ip
-# ip = "1.36.96.26"
+  def initialize(ip, engine)
+    @socket = connect(ip)
+    @stream_parser = StreamParser.new
+    @engine = engine.tap { |e| e.channel = @socket }
+  end
+
+  def run_loop
+    engine.send_version(ip, port)
+    loop do
+      recv
+    end
+  end
+
+  private
+
+  attr_reader :socket, :stream_parser, :engine
+
+  def recv(_type = nil)
+    socket.gets.tap do |data|
+      if data.nil?
+        # log "<- nil"
+      else
+        log "<- data: #{data}"
+
+        messages = stream_parser.parse(data)
+        engine.handle(messages) unless messages.empty?
+      end
+    end
+  end
+
+  def connect(ip)
+    port = Bitcoin.network[:default_port]
+    log "Connecting to peer @ #{ip}:#{port}"
+
+    TCPSocket.open(ip, port).tap do
+      @ip = ip
+      @port = port
+      log "Connected!"
+    end
+  end
+end
+
 ip = "178.33.136.164" # Fast guy
-
 engine = Engine.new
 peer = Peer.new(ip, engine)
-peer.run_loop
+peer.async.run_loop
 
-log "DONE"
+puts "DONE"

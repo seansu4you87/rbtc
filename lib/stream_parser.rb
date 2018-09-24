@@ -22,7 +22,7 @@ class StreamParser
     messages = []
 
     more = true
-    while more do
+    while more
       message, more = parse_buffer
       messages << message if message
     end
@@ -122,7 +122,7 @@ class StreamParser
 
   def parse_addr(payload)
     _count, payload = Bitcoin::Protocol.unpack_var_int(payload)
-    payload.each_byte.each_slice(30).inject([]) do |acc, byte_array|
+    payload.each_byte.each_slice(30).reduce([]) do |acc, byte_array|
       # begin
       acc << Bitcoin::Protocol::Addr.new(byte_array.pack('C*'))
       acc
@@ -162,7 +162,7 @@ class StreamParser
     @version = Bitcoin::Protocol::Version.parse(payload)
   end
 
-  def parse_alert(payload)
+  def parse_alert(_payload)
     # NOTE(yu): Alert parsing is broken
     # Bitcoin::Protocol::Alert.parse(payload)
 
