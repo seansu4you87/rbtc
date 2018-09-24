@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'eventmachine'
 require 'bitcoin/connection'
 
@@ -8,7 +10,7 @@ class SimpleConnection < Bitcoin::Connection
   def on_handshake_begin
     puts "handshake begin"
     version = Bitcoin::Protocol::Version.new(
-      last_block: 127953,
+      last_block: 127_953,
       from: "127.0.0.1:8333",
       to: @sockaddr.reverse.join(":"),
       user_agent: "/rbtc:0.0.1/",
@@ -46,24 +48,18 @@ class SimpleConnection < Bitcoin::Connection
 
   def on_ping(nonce)
     puts "<- ping: #{nonce}"
-    if nonce
-      pong = Bitcoin::Protocol.pong_pkt(nonce)
-      puts "-> pong: #{pong}"
-      send_data(pong)
-    end
+    return unless nonce
+
+    pong = Bitcoin::Protocol.pong_pkt(nonce)
+    puts "-> pong: #{pong}"
+    send_data(pong)
   end
 
-  def on_addr(addr)
+  def on_addr(addr); end
 
-  end
+  def on_inv_block(hash); end
 
-  def on_inv_block(hash)
-
-  end
-
-  def on_inv_transaction(hash)
-
-  end
+  def on_inv_transaction(hash); end
 
   def on_block(block)
     puts "block <- peer: #{block.hash}"
@@ -73,20 +69,17 @@ class SimpleConnection < Bitcoin::Connection
     puts "tx <- peer: #{tx.hash}"
   end
 
-  def on_get_block(hash)
+  def on_get_block(hash); end
 
-  end
-
-  def on_get_transaction(hash)
-
-  end
+  def on_get_transaction(hash); end
 end
 
 EM.run do
   connections = []
   # host = '127.0.0.1'
   # host = '217.157.1.202'
+  host = "1.36.96.26"
 
-  # RawJSON_Connection.connect(host, 8333, connections)
-  SimpleConnection.connect_random_from_dns(connections)
+  SimpleConnection.connect(host, 8333, connections)
+  # SimpleConnection.connect_random_from_dns(connections)
 end

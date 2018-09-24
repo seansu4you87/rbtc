@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'socket'
 
 class Server
@@ -70,7 +72,7 @@ class Server
     end
 
     def send_message!(from, msg)
-      conn.puts "#{from.to_s}: #{msg}"
+      conn.puts "#{from}: #{msg}"
     end
 
     def die!

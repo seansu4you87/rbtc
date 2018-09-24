@@ -6,4 +6,4 @@ ruby '~> 2.5.1'
 
 gem "bitcoin-ruby"
 gem "eventmachine" # TODO(yu): kill this later?
-
+gem "rubocop"
