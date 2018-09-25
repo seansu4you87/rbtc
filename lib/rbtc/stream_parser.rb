@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class StreamParser
+class RBTC::StreamParser
   class Message
     attr_reader :value, :type
 
@@ -277,5 +277,9 @@ class StreamParser
   def parse_error(*err)
     @stats[:total_errors] += 1
     puts "Parsed errors: #{err}"
+  end
+
+  def puts(str)
+    RBTC::Logger.info("StreamParser") { str }
   end
 end

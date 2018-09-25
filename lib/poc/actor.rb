@@ -3,7 +3,7 @@
 require 'bitcoin'
 require 'celluloid/current'
 
-require_relative './stream_parser'
+require_relative './/stream_parser'
 
 # NOTE(yu): Celluloid is unmaintained
 #
@@ -26,7 +26,7 @@ def log(str, tags = [])
   puts "#{Time.now} #{out}"
 end
 
-class Engine
+class Engine_
   attr_accessor :channel
 
   def handle(messages)
@@ -98,7 +98,7 @@ class Engine
   # end
 end
 
-class Peer
+class Peer_
   include Celluloid
 
   attr_reader :ip, :port
@@ -146,8 +146,8 @@ class Peer
 end
 
 ip = "178.33.136.164" # Fast guy
-engine = Engine.new
-peer = Peer.new(ip, engine)
+engine = Engine_.new
+peer = Peer_.new(ip, engine)
 peer.async.run_loop
 
 puts "DONE"

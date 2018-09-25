@@ -1,6 +1,9 @@
 # Relaxed.Ruby.Style
 ## Version 2.2
 
+Style/ClassAndModuleChildren:
+  Enabled: false
+
 Style/EachWithObject:
   Enabled: false
 

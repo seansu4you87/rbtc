@@ -8,7 +8,7 @@ require 'socket'
 require 'bitcoin'
 
 # lib
-require_relative './stream_parser'
+require_relative './tc/stream_parser'
 
 def log(str, tags = [])
   out = str
@@ -19,7 +19,7 @@ def log(str, tags = [])
   puts "#{Time.now} #{out}"
 end
 
-class DNSResolver
+class DNSResolver_
   attr_reader :seeds
 
   def initialize(seeds)
@@ -45,7 +45,7 @@ class DNSResolver
   attr_reader :ips
 end
 
-class Peer
+class Peer_
   attr_reader :ip, :port
 
   def initialize(ip, engine)
@@ -90,7 +90,7 @@ class Peer
   end
 end
 
-class Engine
+class Engine_
   attr_accessor :channel
 
   def handle(messages)
@@ -176,8 +176,8 @@ log "NEW RUN: #{Time.now}"
 # ip = "1.36.96.26"
 ip = "178.33.136.164" # Fast guy
 
-engine = Engine.new
-peer = Peer.new(ip, engine)
+engine = Engine_.new
+peer = Peer_.new(ip, engine)
 peer.run_loop
 
 log "DONE"
