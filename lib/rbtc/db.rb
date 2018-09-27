@@ -1,0 +1,3 @@
+module RBTC::DB
+
+end

@@ -1,11 +1,13 @@
 require "bitcoin"
 
-class RBTC::Peer
+class RBTC::P2P::Peer
+  include RBTC::Logger
+
   attr_reader :ip, :port, :thread
 
   def initialize(ip, engine)
     @socket = connect(ip)
-    @stream_parser = RBTC::StreamParser.new
+    @stream_parser = RBTC::P2P::StreamParser.new
     @engine = engine
   end
 
@@ -23,7 +25,11 @@ class RBTC::Peer
   end
 
   # NOTE(yu): `send` is a Ruby object variable we don't want to override
-  def delv(data)
+  def delv(message)
+    data = message
+    data = data.value unless data.is_a? String
+    data = data.to_pkt unless data.is_a? String
+
     puts "-> data: #{data.unpack("b*").first}"
     socket.puts data
   end
@@ -54,9 +60,5 @@ class RBTC::Peer
       @port = port
       puts "Connected!"
     end
-  end
-
-  def puts(str)
-    RBTC::Logger.info("Peer") { str }
   end
 end

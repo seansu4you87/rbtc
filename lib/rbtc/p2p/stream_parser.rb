@@ -1,14 +1,7 @@
 # frozen_string_literal: true
 
-class RBTC::StreamParser
-  class Message
-    attr_reader :value, :type
-
-    def initialize(value, type)
-      @value = value
-      @type = type.to_sym
-    end
-  end
+class RBTC::P2P::StreamParser
+  include RBTC::Logger
 
   attr_reader :stats
 
@@ -236,7 +229,7 @@ class RBTC::StreamParser
               parse_error(:unknown_packet, [command, payload.hth])
               :error
             end
-    Message.new(value, command)
+    RBTC::Engine::Message.new(value, command)
   end
 
   def handle_reject(payload)
@@ -277,9 +270,5 @@ class RBTC::StreamParser
   def parse_error(*err)
     @stats[:total_errors] += 1
     puts "Parsed errors: #{err}"
-  end
-
-  def puts(str)
-    RBTC::Logger.info("StreamParser") { str }
   end
 end
