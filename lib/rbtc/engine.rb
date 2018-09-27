@@ -26,12 +26,16 @@ class RBTC::Engine
 
   def handle(messages, peer)
     messages.each do |m|
-      puts_recv(m.type, m.value, peer)
+      puts "<- #{type}: #{peer} #{value}"
       send(:"handle_#{m.type}", m.value, peer)
     end
   end
 
   def handshake(peer)
+    # NOTE(yu): This initiates the peer connection
+    #
+    # A VERSION is sent to the new peer.  If it is accepted, then we will receive VERSION back,
+    # followed by a VERACK.
     puts "extending hands..."
     version = Bitcoin::Protocol::Version.new(
         last_block: 127_953,
@@ -47,14 +51,21 @@ class RBTC::Engine
   private
 
   def respond(message, peer)
-    puts_delv(message.type, message.value, peer)
+    puts "-> #{type}: #{peer} #{value}"
     peer.delv(message)
   end
 
   def handle_version(version, peer)
+    # NOTE(yu): Nothing to do here, for client connections
+    #
+    # TODO(yu): for server connections, we need to send our own VERSION, along with a VERACK
   end
 
   def handle_verack(_, peer)
+    # NOTE(yu): At this point, the connection is fully established
+    #
+    # We can start sending other messages.  Not sure what so far?
+
     # start = ("\x00" * 32)
     # stop  = ("\x00" * 32)
     # pkt = Bitcoin::Protocol.pkt("getblocks", "\x00" + start + stop )
@@ -63,6 +74,9 @@ class RBTC::Engine
   end
 
   def handle_ping(nonce, peer)
+    # NOTE(yu): This is a health check, sent by our peer.
+    #
+    # Respond with PONG
     # TODO(yu): Switch this to use `Message` once there is a `Pong` object
     pong = Bitcoin::Protocol.pong_pkt(nonce)
     puts "-> pong: #{pong}"
@@ -70,23 +84,28 @@ class RBTC::Engine
   end
 
   def handle_alert(_, peer)
+    # NOTE(yu): Deprecated in March 2016
   end
 
   def handle_addr(address, peer)
+    # NOTE(yu): Store and persist these addresses in our potential peers list?
   end
 
   def handle_getheaders(headers, peer)
+    # NOTE(yu): Send HEADERS message back with appropriate headers
   end
 
   def handle_inv(inv, peer)
-  end
-
-  def puts_recv(type, value, peer)
-    puts "<- #{type}: #{peer} #{value}"
-  end
-
-  def puts_delv(type, value, peer)
-    puts "-> #{type}: #{peer} #{value}"
+    # NOTE(yu): Save information if relevant
+    #
+    # Can be of type:
+    # - ERROR -> ignore
+    # - MSG_TX -> TX
+    # - MSG_BLOCK -> BLOCK
+    # - MSG_FILTERED_BLOCK -> MERKLEBLOCK
+    # - MSG_CMPCT_BLOCK -> CMPCTBLOCK
+    #
+    # Reply with the GETDATA message
   end
 end
 
