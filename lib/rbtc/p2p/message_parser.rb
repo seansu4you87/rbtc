@@ -36,15 +36,26 @@ class RBTC::P2P::MessageParser
   end
 
   def parse_addr(bytes)
-    raise "BOOM"
+    _count, bytes = Bitcoin::Protocol.unpack_var_int(bytes)
+    bytes.each_byte.each_slice(30).inject([]) do |acc, b|
+      chars = b.pack("C*")
+      time, services, ip, port = chars.unpack("VQx12a4n")
+      ip = ip.unpack("C*").join(".")
+      acc << RBTC::Engine::Message::Addr.new(
+          time: time,
+          services: services,
+          ip: ip,
+          port: port,
+      )
+    end
   end
 
   def parse_getaddr(bytes)
     raise "BOOM"
   end
 
-  def parse_verack(bytes)
-    raise "BOOM"
+  def parse_verack(_bytes)
+    RBTC::Engine::Message::Verack.new
   end
 
   def parse_version(bytes)
@@ -76,7 +87,8 @@ class RBTC::P2P::MessageParser
   end
 
   def parse_ping(bytes)
-    raise "BOOM"
+    nonce = bytes.unpack1("Q")
+    RBTC::Engine::Message::Ping.new(nonce)
   end
 
   def parse_pong(bytes)

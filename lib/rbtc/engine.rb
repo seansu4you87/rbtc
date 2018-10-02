@@ -73,12 +73,12 @@ class RBTC::Engine
     # peer.delv pkt
   end
 
-  def handle_ping(nonce, peer)
+  def handle_ping(ping, peer)
     # NOTE(yu): This is a health check, sent by our peer.
     #
     # Respond with PONG
     # TODO(yu): Switch this to use `Message` once there is a `Pong` object
-    pong = Bitcoin::Protocol.pong_pkt(nonce)
+    pong = Bitcoin::Protocol.pong_pkt(ping.nonce)
     puts "-> pong: #{pong}"
     peer.delv pong
   end
@@ -87,7 +87,7 @@ class RBTC::Engine
     # NOTE(yu): Deprecated in March 2016
   end
 
-  def handle_addr(address, peer)
+  def handle_addr(addr, peer)
     # NOTE(yu): Store and persist these addresses in our potential peers list?
   end
 

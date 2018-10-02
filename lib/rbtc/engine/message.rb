@@ -49,4 +49,7 @@ class RBTC::Engine::Message
   end
 end
 
+require_relative "./message/addr"
+require_relative "./message/ping"
+require_relative "./message/verack"
 require_relative "./message/version"
