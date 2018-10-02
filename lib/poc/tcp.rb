@@ -95,8 +95,8 @@ class Engine_
 
   def handle(messages)
     messages.each do |m|
-      log "handling <- message: (#{m.type}, #{m.value})"
-      send(:"handle_#{m.type}", m.value)
+      log "handling <- message: (#{m.type}, #{m.payload})"
+      send(:"handle_#{m.type}", m.payload)
     end
   end
 

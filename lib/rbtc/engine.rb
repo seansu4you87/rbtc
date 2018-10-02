@@ -26,8 +26,8 @@ class RBTC::Engine
 
   def handle(messages, peer)
     messages.each do |m|
-      puts "<- #{type}: #{peer} #{value}"
-      send(:"handle_#{m.type}", m.value, peer)
+      puts "<- #{m.type}: #{peer} #{m.payload}"
+      send(:"handle_#{m.type}", m.payload, peer)
     end
   end
 
@@ -44,14 +44,14 @@ class RBTC::Engine
         user_agent: "/rbtc:0.0.1/",
         relay: true
     )
-    message = Message.new(version, :version)
+    message = Message.build(version, :version)
     respond(message, peer)
   end
 
   private
 
   def respond(message, peer)
-    puts "-> #{type}: #{peer} #{value}"
+    puts "-> #{message.type}: #{peer} #{message.payload}"
     peer.delv(message)
   end
 

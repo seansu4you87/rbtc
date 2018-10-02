@@ -27,7 +27,7 @@ class RBTC::P2P::Peer
   # NOTE(yu): `send` is a Ruby object variable we don't want to override
   def delv(message)
     data = message
-    data = data.value unless data.is_a? String
+    data = data.payload unless data.is_a? String
     data = data.to_pkt unless data.is_a? String
 
     puts "-> data: #{data.unpack("b*").first}"

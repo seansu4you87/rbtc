@@ -8,6 +8,7 @@ class RBTC::P2P::StreamParser
   def initialize
     @buffer = ''
     @stats = { total_packets: 0, total_bytes: 0, total_errors: 0 }
+    @message_parser = RBTC::P2P::MessageParser.new
   end
 
   def parse(data)
@@ -24,6 +25,8 @@ class RBTC::P2P::StreamParser
 
   private
 
+  attr_reader :message_parser
+
   def magic_head
     Bitcoin.network[:magic_head]
   end
@@ -33,25 +36,26 @@ class RBTC::P2P::StreamParser
   def parse_buffer
     return unless buffered_header?
 
-    magic, command, length, checksum = extract_message_header
-    payload = extract_message_payload(length)
-    if magic != magic_head
-      handle_stream_error(:close, "Bad magic head: #{magic} != #{magic_head}")
+    # magic, command, length, checksum = extract_message_header
+    header = extract_message_header
+    payload = extract_message_payload(header.length)
+    if header.magic != magic_head
+      handle_stream_error(:close, "Bad magic head: #{header.magic} != #{magic_head}")
       reset_buffer!
       return [nil, false]
     end
 
-    if checksum(payload) != checksum
-      if buffered_payload?(payload, length)
+    if checksum(payload) != header.checksum
+      if buffered_payload?(payload, header.length)
         handle_stream_error(:close, 'checksum mismatch')
       else
-        handle_stream_error(:debug, "chunked packet stream (#{payload.size}/#{length})")
+        handle_stream_error(:debug, "chunked packet stream (#{payload.size}/#{header.length})")
       end
       return [nil, false]
     end
 
-    rotate_buffer!(length)
-    [deserialize_message(command, payload), !buffer_empty?]
+    rotate_buffer!(header.length)
+    [deserialize_message(header, payload), !buffer_empty?]
   end
 
   def buffered_header?
@@ -60,6 +64,8 @@ class RBTC::P2P::StreamParser
 
   def extract_message_header
     @buffer.unpack("a4A12Va4")
+    header = message_parser.parse_header(@buffer)
+    # [header.magic, header.command.to_s, header.length, header.checksum]
   end
 
   def extract_message_payload(length)
@@ -162,31 +168,32 @@ class RBTC::P2P::StreamParser
     puts "Parsed alert - except didn't cause it's broken"
   end
 
-  def deserialize_message(command, payload)
-    @stats[:total_packets] += 1
-    @stats[:total_bytes] += payload.bytesize
-    @stats[command] ? (@stats[command] += 1) : @stats[command] = 1
+  def deserialize_message(header, bytes)
+    command = header.command.to_s
+    stats[:total_packets] += 1
+    stats[:total_bytes] += bytes.bytesize
+    stats[command] ? (stats[command] += 1) : stats[command] = 1
     value = case command
             when 'tx'
               puts "Parsed tx"
-              Bitcoin::Protocol::Tx.new(payload)
+              Bitcoin::Protocol::Tx.new(bytes)
             when 'block'
               puts "Parsed block"
-              Bitcoin::Protocol::Block.new(payload)
+              Bitcoin::Protocol::Block.new(bytes)
             when 'headers'
               puts "Parsed headers"
-              parse_headers(payload)
+              parse_headers(bytes)
             when 'inv'
               # puts "Parsed inv"
-              parse_inv(payload, :put)
+              parse_inv(bytes, :put)
               :inv
             when 'getdata'
               puts "Parsed getdata"
-              parse_inv(payload, :get)
+              parse_inv(bytes, :get)
               :getdata
             when 'addr'
               puts "Parsed addr"
-              parse_addr(payload)
+              parse_addr(bytes)
             when 'getaddr'
               puts "Parsed getaddr"
               :getaddr
@@ -195,41 +202,42 @@ class RBTC::P2P::StreamParser
               :verack
             when 'version'
               puts "Parsed version"
-              parse_version(payload)
+              parse_version(bytes)
             when 'alert'
               # puts "Parsed alert"
-              parse_alert(payload)
+              parse_alert(bytes)
               :alert
             when 'ping';
               puts "Parsed ping"
-              payload.unpack1('Q')
+              bytes.unpack1('Q')
             when 'pong';
               puts "Parsed pong"
-              payload.unpack1('Q')
+              bytes.unpack1('Q')
             when 'getblocks';
               puts "Parsed getblocks"
-              parse_getblocks(payload)
+              parse_getblocks(bytes)
             when 'getheaders';
               puts "Parsed getheaders"
-              parse_getblocks(payload)
+              parse_getblocks(bytes)
             when 'mempool';
-              handle_mempool_request(payload)
+              handle_mempool_request(bytes)
               :mempool
             when 'notfound';
-              handle_notfound_reply(payload)
+              handle_notfound_reply(bytes)
               :notfound
             when 'merkleblock';
               puts "Parsed merkleblock"
-              parse_mrkle_block(payload)
+              parse_mrkle_block(bytes)
             when 'reject';
               puts "Parsed reject"
-              handle_reject(payload)
+              handle_reject(bytes)
             else
               puts "Parsed unknown...about to parse errors..."
-              parse_error(:unknown_packet, [command, payload.hth])
+              parse_error(:unknown_packet, [command, bytes.hth])
               :error
             end
-    RBTC::Engine::Message.new(value, command)
+    RBTC::Engine::Message.new(header, value)
+    message_parser.parse(header, bytes)
   end
 
   def handle_reject(payload)
@@ -268,7 +276,7 @@ class RBTC::P2P::StreamParser
   end
 
   def parse_error(*err)
-    @stats[:total_errors] += 1
+    stats[:total_errors] += 1
     puts "Parsed errors: #{err}"
   end
 end
